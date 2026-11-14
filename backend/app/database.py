@@ -6,11 +6,19 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-load_dotenv()  # ВАЖНО: до чтения DATABASE_URL, иначе env не подхватится
+load_dotenv()  # ВАЖНО: до чтения DATABASE_URL
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./dcreator.db")
+# Нормализация: пробелы, кавычки, переносы строк — частые артефакты копирования
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip().strip('"').strip("'")
 
-# check_same_thread — специфичный только для SQLite аргумент
+# Render/Neon могут прислать postgresql:// — для psycopg3 нужен +psycopg
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len("postgresql://"):]
+
+# Пустая переменная — локальная разработка на SQLite
+if not DATABASE_URL:
+    DATABASE_URL = "sqlite:///./dcreator.db"
+
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
     connect_args["check_same_thread"] = False
