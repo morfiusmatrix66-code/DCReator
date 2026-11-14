@@ -1,5 +1,5 @@
 """Доступ только для администратора."""
-from aiogram.dispatcher.middlewares import BaseMiddleware
+from aiogram.dispatcher.middlewares.base import BaseMiddleware
 from aiogram.types import Message, CallbackQuery
 from app.config import ADMIN_IDS
 
