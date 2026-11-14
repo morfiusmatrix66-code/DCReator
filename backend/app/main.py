@@ -10,6 +10,14 @@ from app.routers import leads
 # ... существующие импорты ...
 from app.routers import leads, chat  # ← ДОБАВИТЬ chat
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+# Инициализация лимитера
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
