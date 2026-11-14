@@ -19,6 +19,20 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
+from fastapi.responses import JSONResponse
+
+async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={
+            "detail": "Слишком много запросов. Попробуйте через минуту.",
+            "retry_after": exc.retry_after
+        }
+    )
+
+app.add_exception_handler(RateLimitExceeded, custom_rate_limit_handler)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
