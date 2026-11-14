@@ -2,16 +2,12 @@
 # Секреты
 .env
 .env.local
-
-# Python
 .venv/
 __pycache__/
 *.pyc
 *.db
 .pytest_cache/
 .coverage
-
-# Node
 node_modules/
 dist/
 "@ | Out-File -FilePath .gitignore -Encoding utf8
