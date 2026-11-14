@@ -1,16 +1,27 @@
-# React + Vite
+# DCreator — Digital Development Studio
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Полноценный full-stack сайт веб-студии с приёмом заявок, AI-ассистентом и Telegram-админкой.
 
-Currently, two official plugins are available:
+## 🌐 Ссылки
+- **Сайт:** [https://dcreator-...vercel.app](https://dcreator-...vercel.app)
+- **API Docs:** [https://dcreator-api.onrender.com/docs](https://dcreator-api.onrend.com/docs)
+- **Telegram-бот:** [@твой_бот](https://t.me/твой_бот)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🛠 Стек
+- **Frontend:** React 19, Vite, Framer Motion, Tailwind/CSS
+- **Backend:** Python 3.13, FastAPI, SQLAlchemy, Pydantic v2
+- **Database:** PostgreSQL (Neon)
+- **Bot:** aiogram 3
+- **Tests:** pytest (94% coverage)
+- **Deploy:** Vercel + Render + Docker
 
-## React Compiler
+## 🚀 Локальный запуск
+```bash
+# Терминал 1: Фронтенд
+npm install && npm run dev
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+# Терминал 2: Бэкенд
+cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload --port 8000
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+# Терминал 3: Бот
+cd bot && pip install -r requirements.txt && python -m app.main

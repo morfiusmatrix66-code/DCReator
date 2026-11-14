@@ -29,7 +29,8 @@ jobs:
       - name: Run tests
         working-directory: ./backend
         run: |
-          pytest --cov=app --cov-report=term-missing
+          pytest --cov=app --cov-report=term-missing --cov-report=xml
+          coverage report --fail-under=90
       
       - name: Check coverage
         working-directory: ./backend
