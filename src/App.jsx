@@ -2,21 +2,16 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Tilt from 'react-parallax-tilt'
 import './App.css'
+import './leads.css'
+import { submitLead } from './lib/api'
+import LeadModal from './components/LeadModal'
 
 function GlassTilt({ children }) {
   return (
     <Tilt
-      tiltMaxAngleX={20}
-      tiltMaxAngleY={20}
-      perspective={1000}
-      scale={1.03}
-      glareEnable={true}
-      maxGlare={0.3}
-      glareColor="#ffffff"
-      glarePosition="all"
-      transitionSpeed={400}
-      gyroscope={true}
-      className="tilt-wrapper"
+      tiltMaxAngleX={20} tiltMaxAngleY={20} perspective={1000} scale={1.03}
+      glareEnable={true} maxGlare={0.3} glareColor="#ffffff" glarePosition="all"
+      transitionSpeed={400} gyroscope={true} className="tilt-wrapper"
     >
       {children}
     </Tilt>
@@ -30,6 +25,9 @@ function App() {
   const [addons, setAddons] = useState([])
   const [formData, setFormData] = useState({ name: '', email: '' })
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [leadModalOpen, setLeadModalOpen] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
   const [messages, setMessages] = useState([
     { from: 'bot', text: 'Привет! Я AI-ассистент D Creator. Чем могу помочь?' }
@@ -60,7 +58,7 @@ function App() {
   const configServices = [
     { id: 'web', name: 'Веб-разработка', price: 80000, time: '2-4 недели' },
     { id: 'tma', name: 'Telegram Mini Apps', price: 60000, time: '1-3 недели' },
-    { id: 'mobile', name: 'Мобильное приложение', price: 150000, time: '4-8 недель' },
+    { id: 'mobile', name: 'Мобильное приложение', price: 150000, time: '4-8 недели' },
     { id: 'design', name: 'UI/UX Дизайн', price: 40000, time: '1-2 недели' }
   ]
 
@@ -80,15 +78,10 @@ function App() {
   ]
 
   const technologies = [
-    { name: 'React', icon: '⚛️' },
-    { name: 'TypeScript', icon: '📘' },
-    { name: 'Node.js', icon: '🟢' },
-    { name: 'Python', icon: '🐍' },
-    { name: 'Docker', icon: '🐳' },
-    { name: 'AWS', icon: '☁️' },
-    { name: 'Figma', icon: '🎨' },
-    { name: 'Vite', icon: '🚀' },
-    { name: 'Git', icon: '🔀' }
+    { name: 'React', icon: '⚛️' }, { name: 'TypeScript', icon: '📘' },
+    { name: 'Node.js', icon: '🟢' }, { name: 'Python', icon: '🐍' },
+    { name: 'Docker', icon: '🐳' }, { name: 'AWS', icon: '☁️' },
+    { name: 'Figma', icon: '🎨' }, { name: 'Vite', icon: '🚀' }, { name: 'Git', icon: '🔀' }
   ]
 
   const features = [
@@ -101,31 +94,75 @@ function App() {
     setAddons(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id])
   }
 
-  const calculateTotal = () => {
+  const calculateTotalNumber = () => {
     let total = selectedService ? configServices.find(s => s.id === selectedService).price : 0
     addons.forEach(id => {
       const addon = addonsList.find(a => a.id === id)
       if (addon) total += addon.price
     })
-    return total.toLocaleString()
+    return total
   }
+  const calculateTotal = () => calculateTotalNumber().toLocaleString()
 
-  const handleConfigSubmit = (e) => {
+  const handleConfigSubmit = async (e) => {
     e.preventDefault()
-    if (selectedService && formData.name && formData.email) setIsSubmitted(true)
+    if (!selectedService || !formData.name.trim() || !formData.email.trim() || isSubmitting) return
+    setIsSubmitting(true)
+    setSubmitError('')
+    const service = configServices.find(s => s.id === selectedService)
+    try {
+      await submitLead({
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        service_id: service.id,
+        service_name: service.name,
+        addons,
+        total: calculateTotalNumber(),
+      })
+      setIsSubmitted(true)
+    } catch (err) {
+      setSubmitError(err.message)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  const handleAiSend = () => {
-    if (!aiInput.trim()) return
-    setMessages(prev => [...prev, { from: 'user', text: aiInput }])
-    setAiInput('')
+const [isAiLoading, setIsAiLoading] = useState(false)
+
+const handleAiSend = async () => {
+  if (!aiInput.trim() || isAiLoading) return
+  
+  const userMessage = aiInput.trim()
+  setMessages(prev => [...prev, { from: 'user', text: userMessage }])
+  setAiInput('')
+  setIsAiLoading(true)
+
+  try {
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const response = await fetch(`${API_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: userMessage }),
+    })
+
+    if (!response.ok) throw new Error('Ошибка сервера')
+
+    const data = await response.json()
+    
+    // Имитируем задержку "печатает..." если бэкенд ответил слишком быстро
     setTimeout(() => {
-      setMessages(prev => [...prev, {
-        from: 'bot',
-        text: 'Отличный вопрос! Напишите нам на hello@dcreator.dev — менеджер ответит в течение часа.'
-      }])
-    }, 800)
+      setMessages(prev => [...prev, { from: 'bot', text: data.reply }])
+      setIsAiLoading(false)
+    }, data.delay_ms || 800)
+
+  } catch (err) {
+    setMessages(prev => [...prev, { 
+      from: 'bot', 
+      text: 'Извините, сейчас я не могу ответить. Попробуйте позже или напишите на hello@dcreator.dev' 
+    }])
+    setIsAiLoading(false)
   }
+}
 
   return (
     <div className="app" data-theme={theme}>
@@ -141,9 +178,7 @@ function App() {
             <a href="#about" onClick={() => scrollTo('about')}>О нас</a>
           </nav>
           <div className="header-actions">
-            <button className="theme-toggle" onClick={toggleTheme}>
-              {theme === 'dark' ? '☀️' : '🌙'}
-            </button>
+            <button className="theme-toggle" onClick={toggleTheme}>{theme === 'dark' ? '☀️' : '🌙'}</button>
             <button className={`menu-btn ${isMenuOpen ? 'active' : ''}`} onClick={() => setIsMenuOpen(!isMenuOpen)}>
               <span></span><span></span><span></span>
             </button>
@@ -154,28 +189,18 @@ function App() {
       {/* HERO */}
       <section className="hero">
         <div className="container hero-content">
-          <motion.div
-            className="hero-text"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-          >
+          <motion.div className="hero-text" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
             <div className="hero-label">DIGITAL DEVELOPMENT STUDIO</div>
             <h1>Разработка будущего<span className="highlight">уже сегодня</span></h1>
             <p>Создаем сложные веб-приложения, Telegram Mini Apps и цифровые продукты. От идеи до production-ready решения за 30 дней.</p>
             <div className="hero-actions">
-              <motion.button className="btn-primary" onClick={() => scrollTo('calculator')} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <motion.button className="btn-primary" onClick={() => setLeadModalOpen(true)} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 Обсудить проект →
               </motion.button>
-              <a href="#services" className="btn-secondary">Смотреть услуги</a>
+              <a href="#calculator" className="btn-secondary" onClick={() => scrollTo('calculator')}>Рассчитать стоимость</a>
             </div>
           </motion.div>
-          <motion.div
-            className="hero-image"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3, duration: 0.8 }}
-          >
+          <motion.div className="hero-image" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3, duration: 0.8 }}>
             <div className="hero-image-wrapper">
               <img src="https://cdni.iconscout.com/illustration/premium/thumb/man-coder-programming-on-computer-illustration-download-in-svg-png-gif-file-formats--html-logo-java-web-developer-doing-coding-laptop-software-development-pack-science-technology-illustrations-8226923.png?f=webp" alt="Digital technology" />
               <div className="hero-image-overlay"></div>
@@ -194,14 +219,7 @@ function App() {
           </motion.div>
           <div className="services-grid">
             {services.map((service, index) => (
-              <motion.div
-                key={index}
-                className="service-card"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
-              >
+              <motion.div key={index} className="service-card" initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: index * 0.1 }}>
                 <div className="service-icon">{service.icon}</div>
                 <h3>{service.title}</h3>
                 <p>{service.desc}</p>
@@ -221,21 +239,15 @@ function App() {
               <p>Работаем с проверенными инструментами и постоянно следим за новыми решениями.</p>
             </motion.div>
           </div>
-			<div className="tech-stack-grid">
-			  {technologies.map((tech, index) => (
-				<GlassTilt key={tech.name}>
-				  <motion.div
-					className="tech-card"
-					initial={{ opacity: 0 }}
-					whileInView={{ opacity: 1 }}
-					viewport={{ once: true }}
-					transition={{ delay: index * 0.05, duration: 0.4 }}
-				  >
-					<div className="tech-icon">{tech.icon}</div>
-					<div className="tech-name">{tech.name}</div>
-				  </motion.div>
-				</GlassTilt>
-			  ))}
+          <div className="tech-stack-grid">
+            {technologies.map((tech, index) => (
+              <GlassTilt key={tech.name}>
+                <motion.div className="tech-card" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: index * 0.05, duration: 0.4 }}>
+                  <div className="tech-icon">{tech.icon}</div>
+                  <div className="tech-name">{tech.name}</div>
+                </motion.div>
+              </GlassTilt>
+            ))}
           </div>
         </div>
       </section>
@@ -250,14 +262,7 @@ function App() {
           </motion.div>
           <div className="timeline">
             {process.map((item, index) => (
-              <motion.div
-                key={index}
-                className="timeline-item"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
-              >
+              <motion.div key={index} className="timeline-item" initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: index * 0.1 }}>
                 <div className="timeline-number">{item.step}</div>
                 <h3>{item.title}</h3>
                 <p>{item.desc}</p>
@@ -273,17 +278,15 @@ function App() {
           <motion.h2 initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
             Конфигуратор проекта
           </motion.h2>
-          <div className="configurator-grid">
+          <form className="configurator-grid" onSubmit={handleConfigSubmit}>
             <div className="config-left">
               <div className="config-section">
                 <h3>1. Выберите тип проекта</h3>
                 <div className="service-grid">
                   {configServices.map(service => (
-                    <button
-                      key={service.id}
+                    <button type="button" key={service.id}
                       className={`service-btn ${selectedService === service.id ? 'active' : ''}`}
-                      onClick={() => setSelectedService(service.id)}
-                    >
+                      onClick={() => setSelectedService(service.id)}>
                       <span className="service-name">{service.name}</span>
                       <span className="service-time">{service.time}</span>
                     </button>
@@ -295,11 +298,7 @@ function App() {
                 <div className="addons-list">
                   {addonsList.map(addon => (
                     <label key={addon.id} className="addon-item">
-                      <input
-                        type="checkbox"
-                        checked={addons.includes(addon.id)}
-                        onChange={() => toggleAddon(addon.id)}
-                      />
+                      <input type="checkbox" checked={addons.includes(addon.id)} onChange={() => toggleAddon(addon.id)} />
                       <span>{addon.name} (+{addon.price.toLocaleString()} ₽)</span>
                     </label>
                   ))}
@@ -308,22 +307,12 @@ function App() {
               {!isSubmitted && (
                 <div className="config-section">
                   <h3>3. Ваши контакты</h3>
-                  <form onSubmit={handleConfigSubmit} className="contact-inputs">
-                    <input
-                      type="text"
-                      placeholder="Ваше имя"
-                      value={formData.name}
-                      onChange={e => setFormData({ ...formData, name: e.target.value })}
-                      required
-                    />
-                    <input
-                      type="email"
-                      placeholder="Email"
-                      value={formData.email}
-                      onChange={e => setFormData({ ...formData, email: e.target.value })}
-                      required
-                    />
-                  </form>
+                  <div className="contact-inputs">
+                    <input type="text" placeholder="Ваше имя" required minLength={2}
+                      value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                    <input type="email" placeholder="Email" required
+                      value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
+                  </div>
                 </div>
               )}
             </div>
@@ -350,14 +339,13 @@ function App() {
                       <span>{calculateTotal()} ₽</span>
                     </div>
                     {!isSubmitted ? (
-                      <button
-                        type="submit"
-                        className="btn-primary full-width"
-                        onClick={handleConfigSubmit}
-                        disabled={!formData.name || !formData.email}
-                      >
-                        Отправить заявку
-                      </button>
+                      <>
+                        <button type="submit" className="btn-primary full-width"
+                          disabled={!formData.name || !formData.email || isSubmitting}>
+                          {isSubmitting ? <><span className="spinner" /> Отправляем…</> : 'Отправить заявку'}
+                        </button>
+                        {submitError && <div className="form-error">{submitError}</div>}
+                      </>
                     ) : (
                       <div className="success-message">
                         ✅ Заявка отправлена!<br />Мы свяжемся с вами в течение часа.
@@ -369,7 +357,7 @@ function App() {
                 )}
               </div>
             </div>
-          </div>
+          </form>
         </div>
       </section>
 
@@ -381,58 +369,33 @@ function App() {
               <div className="section-label">05 — О нас</div>
               <h2>Партнёр для<br />ваших больших идей</h2>
               <p>DCreator — это команда опытных разработчиков, дизайнеров и аналитиков, которые превращают идеи в работающие цифровые продукты.</p>
-              <motion.button
-                className="btn-primary"
-                onClick={() => scrollTo('calculator')}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
+              <motion.button className="btn-primary" onClick={() => setLeadModalOpen(true)} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 Обсудить проект →
               </motion.button>
             </motion.div>
           </div>
           <div className="about-right">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-            >
+            <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.2 }}>
               <div className="about-stats">
-                <div className="stat-item">
-                  <div className="stat-number">50+</div>
-                  <div className="stat-label">завершённых проектов</div>
-                </div>
-                <div className="stat-item">
-                  <div className="stat-number">5</div>
-                  <div className="stat-label">лет на рынке</div>
-                </div>
-                <div className="stat-item">
-                  <div className="stat-number">98%</div>
-                  <div className="stat-label">довольных клиентов</div>
-                </div>
+                <div className="stat-item"><div className="stat-number">50+</div><div className="stat-label">завершённых проектов</div></div>
+                <div className="stat-item"><div className="stat-number">5</div><div className="stat-label">лет на рынке</div></div>
+                <div className="stat-item"><div className="stat-number">98%</div><div className="stat-label">довольных клиентов</div></div>
               </div>
             </motion.div>
           </div>
         </div>
         <div className="container">
-			<div className="about-features">
-			  {features.map((feature, index) => (
-				<GlassTilt key={index}>
-				  <motion.div
-					className="feature-card"
-					initial={{ opacity: 0 }}
-					whileInView={{ opacity: 1 }}
-					viewport={{ once: true }}
-					transition={{ delay: index * 0.1, duration: 0.4 }}
-				  >
-					<div className="feature-icon">{feature.icon}</div>
-					<h3>{feature.title}</h3>
-					<p>{feature.desc}</p>
-					<div className="feature-arrow">→</div>
-				  </motion.div>
-				</GlassTilt>
-			  ))}
+          <div className="about-features">
+            {features.map((feature, index) => (
+              <GlassTilt key={index}>
+                <motion.div className="feature-card" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: index * 0.1, duration: 0.4 }}>
+                  <div className="feature-icon">{feature.icon}</div>
+                  <h3>{feature.title}</h3>
+                  <p>{feature.desc}</p>
+                  <div className="feature-arrow">→</div>
+                </motion.div>
+              </GlassTilt>
+            ))}
           </div>
         </div>
       </section>
@@ -460,8 +423,8 @@ function App() {
             <div className="footer-col">
               <h4>Контакты</h4>
               <a href="mailto:hello@dcreator.dev">hello@dcreator.dev</a>
-              <a href="#">Telegram</a>
-              <a href="#">GitHub</a>
+              <a href="https://github.com/morfiusmatrix66-code/DCreator" target="_blank" rel="noreferrer">GitHub</a>
+              <button className="footer-link-btn" onClick={() => setLeadModalOpen(true)}>Обсудить проект</button>
             </div>
           </div>
           <div className="footer-bottom">© 2026 D Creator. All rights reserved.</div>
@@ -469,38 +432,25 @@ function App() {
       </footer>
 
       {/* AI ASSISTANT */}
-      <motion.button className="ai-fab" onClick={() => setAiOpen(!aiOpen)} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-        🤖
-      </motion.button>
+      <motion.button className="ai-fab" onClick={() => setAiOpen(!aiOpen)} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>🤖</motion.button>
       <AnimatePresence>
         {aiOpen && (
-          <motion.div
-            className="ai-window"
-            initial={{ opacity: 0, y: 20, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.9 }}
-          >
-            <div className="ai-header">
-              <span>AI-Ассистент</span>
-              <button onClick={() => setAiOpen(false)}>✕</button>
-            </div>
+          <motion.div className="ai-window" initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.9 }}>
+            <div className="ai-header"><span>AI-Ассистент</span><button onClick={() => setAiOpen(false)}>✕</button></div>
             <div className="ai-messages">
-              {messages.map((m, i) => (
-                <div key={i} className={`ai-msg ${m.from}`}>{m.text}</div>
-              ))}
+              {messages.map((m, i) => <div key={i} className={`ai-msg ${m.from}`}>{m.text}</div>)}
             </div>
             <div className="ai-input-row">
-              <input
-                value={aiInput}
-                onChange={e => setAiInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAiSend()}
-                placeholder="Напишите сообщение..."
-              />
-              <button onClick={handleAiSend}>→</button>
+              <input value={aiInput} onChange={e => setAiInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAiSend()} placeholder="Напишите сообщение..." />
+              <button onClick={handleAiSend} disabled={isAiLoading} style={{ opacity: isAiLoading ? 0.6 : 1, cursor: isAiLoading ? 'not-allowed' : 'pointer' }}>
+				  {isAiLoading ? '...' : '→'}
+				</button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      <LeadModal open={leadModalOpen} onClose={() => setLeadModalOpen(false)} />
     </div>
   )
 }
